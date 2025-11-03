@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lease Risk Demo Map</title>
+  <!-- Leaflet -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+  <!-- Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" integrity="sha512-SzlrxWUlpfuzQ+pcUCosxcglQRNAq/DZjVsC0lE40xsADsfeQoE4jqQXG8tbtS3f1Xx1rVQ6U1Q9R8N+E2s+ug==" crossorigin="anonymous" referrerpolicy="no-referrer"/>
+  <style>
+    :root{
+      --bg:#0b0d12; --panel:#0f1420; --muted:#97a3b6; --text:#eaf0ff;
+      --ok:#16a34a; --warn:#f59e0b; --bad:#ef4444; --line:#1b2536; --chip:#162132;
+      --brand:#3b82f6; --card:#0b1220; --card2:#0c1322;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%; margin:0; background:var(--bg); color:var(--text); font:14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, Apple SD Gothic Neo, sans-serif}
+    .app{display:grid; grid-template-columns: 1fr 400px; grid-template-rows:56px 1fr; height:100%}
+    header{grid-column:1/3; display:flex; align-items:center; gap:12px; padding:10px 16px; border-bottom:1px solid var(--line); background:linear-gradient(180deg,#0f1422,#0d1320)}
+    header .title{font-weight:700; letter-spacing:.2px}
+    #map{height:100%; width:100%}
+    .panel{border-left:1px solid var(--line); background:linear-gradient(180deg,#0d1422,#0a101c); padding:16px; overflow:auto}
+    .panel.hidden{display:none}
+    .muted{color:var(--muted)}
+
+    /* Cards */
+    .grid2{display:grid; grid-template-columns:repeat(2,1fr); gap:12px}
+    .card{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px; box-shadow:0 6px 18px rgba(0,0,0,.25)}
+    .card h4{margin:0 0 6px 0; font-size:15px}
+
+    /* Key-Value rows */
+    #info{margin-top:8px}
+    .row{display:grid; grid-template-columns:140px 1fr; gap:10px; padding:10px 12px; border-radius:10px; background:var(--card2); border:1px solid #142036; margin-bottom:8px}
+    .row b{color:#cfe0ff}
+
+    .chip{display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; background:var(--chip); border:1px solid #2c3c59}
+    .risk.low{background:#0f1f16; color:#9ae6b4; border-color:#214a33}
+    .risk.mid{background:#231f0e; color:#fde68a; border-color:#4d3c16}
+    .risk.high{background:#2b1112; color:#fecaca; border-color:#5c1a1d}
+    .badge{padding:2px 8px; border-radius:6px; font-weight:600}
+    .badge.ok{background:rgba(22,163,74,.15); color:#86efac}
+    .badge.no{background:rgba(239,68,68,.15); color:#fecaca}
+
+    /* Toolbar */
+    .toolbar{display:flex; gap:8px; align-items:center; margin-left:auto}
+    .btn{background:#0c1322; border:1px solid var(--line); color:#d6e2ff; padding:7px 12px; border-radius:10px; cursor:pointer; display:inline-flex; gap:6px; align-items:center}
+    .btn:hover{border-color:#334155; background:#0f182b}
+
+    /* Legend */
+    .legend{position:absolute; right:12px; bottom:12px; background:#0f1420cc; backdrop-filter:blur(6px); border:1px solid var(--line); border-radius:10px; padding:8px 10px; color:var(--muted)}
+    .legend div{display:flex; align-items:center; gap:8px; margin:2px 0}
+    .dot{width:10px; height:10px; border-radius:50%}
+    .dot.low{background:#16a34a}
+    .dot.mid{background:#f59e0b}
+    .dot.high{background:#ef4444}
+
+    /* Popup */
+    .leaflet-popup-content-wrapper{background:#0e1423ef; color:#e8f0ff; border:1px solid #1a2740; border-radius:12px}
+    .leaflet-popup-tip{background:#0e1423ef}
+    .pop h4{margin:0 0 4px 0}
+    .pop small{color:#9fb0cd}
+
+    /* Animated pin */
+    .custom-pin .pin{width:16px; height:16px; border-radius:50%; background:var(--brand); position:relative; box-shadow:0 0 0 3px rgba(0,0,0,.25)}
+    .custom-pin .pin::after{content:""; position:absolute; inset:-8px; border-radius:50%; border:2px solid var(--brand); opacity:.45; animation:pulse 1.5s infinite}
+    .custom-pin .pin{background:var(--c)}
+    .custom-pin .pin::after{border-color:var(--c)}
+    @keyframes pulse{0%{transform:scale(.7); opacity:.6} 70%{transform:scale(1.3); opacity:0} 100%{opacity:0}}
+
+    /* Responsive */
+    @media (max-width: 960px){
+      .app{grid-template-columns:1fr; grid-template-rows:56px 1fr auto}
+      header{grid-column:1}
+      .panel{grid-column:1; grid-row:3}
+      .grid2{grid-template-columns:1fr}
+    }
+    /* High-visibility pins */
+    .pin2{width:22px;height:22px;display:grid;place-items:center}
+    .pin2 .dot{width:14px;height:14px;border-radius:50%;background:var(--c);
+      border:2px solid #fff;box-shadow:0 0 0 3px rgba(0,0,0,.35), 0 0 14px var(--c)}
+    .pin2 .dot::after{content:"";position:absolute;width:14px;height:14px;border-radius:50%;
+      animation:pinPulse 1.8s ease-out infinite;border:2px solid var(--c);opacity:.5}
+    @keyframes pinPulse{0%{transform:scale(.8);opacity:.6}70%{transform:scale(1.5);opacity:0}100%{opacity:0}}
+
+    /* Tooltip for pins */
+    .leaflet-tooltip.tt{background:#0e1423; color:#dbe7ff; border:1px solid #1a2740; border-radius:6px; padding:4px 6px; box-shadow:0 6px 16px rgba(0,0,0,.35); font-size:12px}
+    .leaflet-tooltip.tt:before{border-top-color:#0e1423}
+  </style>
+  <!-- CSV streaming parser -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <!-- deck.gl + leaflet adapter (WebGL scatter for up to ~1M points) -->
+</head>
+<body>
+  <div class="app">
+    <header>
+      <i class="fa-solid fa-map-location-dot" style="color:var(--brand)"></i>
+      <div class="title">임대 리스크 데모 맵</div>
+      <div class="muted">(주소 미포함 데이터 → 임의 위치 핀)</div>
+      <div class="toolbar">
+        <label class="btn" for="csvFile"><i class="fa-solid fa-file-csv"></i> CSV 불러오기</label>
+        <input type="file" id="csvFile" accept=".csv" style="display:none" />
+        <div class="btn" style="gap:6px">
+          <i class="fa-solid fa-filter"></i>
+          <span>샘플</span>
+          <input id="sampleSize" type="number" min="1" max="500" value="500" style="width:110px;background:transparent;border:none;color:#d6e2ff;outline:none"/>
+        </div>
+        <button class="btn" id="btnToggle"><i class="fa-solid fa-circle-info"></i> 정보 패널</button>
+        <button class="btn" id="btnReset"><i class="fa-solid fa-bullseye"></i> 초기 위치</button>
+        <button class="btn" id="btnRandom"><i class="fa-solid fa-shuffle"></i> 랜덤 핀</button>
+      </div>
+    </header>
+    <div id="map"></div>
+    <aside class="panel" id="detail">
+      <h3 style="margin:6px 0 10px 0">계약 정보</h3>
+      <div id="summary" class="muted">왼쪽 지도에서 핀을 클릭하세요.</div>
+      <div id="info" style="display:none"></div>
+      <div style="margin-top:12px" class="muted">※ 실제 주소가 없으므로 서울 시내 임의 좌표에 표시합니다.</div>
+    </aside>
+  </div>
+
+  <script>
+    // === Inline JS (clean rewrite) + CSV reservoir sampling & deck.gl overlay ===
+    // 1) Sample data
+    const leases = [
+      {
+        lease_id: 'L-0000000', lease_date: '2024-11-30', lease_type_encoded: 0,
+        deposit_amount: 120000, rent_amount: 0, signgungu_standard: '강남구 삼성동', bldg_name: 'THESHARP강남센텀',
+        housing_type_encoded: 0, area_m2: 129.97, build_year: 2021, lease_risk_level: 0,
+        deposit_per_m2: 923.285, region_accident_rate: 0.66, avg_debt_amt: 6670000000,
+        building_age: 3, zone_risk_flag: 0, landlord_risk_flag: 0, broker_trust_comprehensive: 0.8928,
+        user_checklist_pass_rate: 0.65, risk_score_unified: 0.2297, broker_insurance_flag: 1, broker_risk_flag: 0,
+        jeonse_ratio: 0.0, yearly_cost_per_m2: 20.56, fraud_label: 0
+      },
+      {
+        lease_id: 'L-0000008', lease_date: '2024-11-30', lease_type_encoded: 1,
+        deposit_amount: 1000, rent_amount: 90, signgungu_standard: '마포구 합정동', bldg_name: '마포삼성3(연도미상)',
+        housing_type_encoded: 1, area_m2: 84.99, build_year: 2015, lease_risk_level: 0,
+        deposit_per_m2: 11.76, region_accident_rate: 1.2, avg_debt_amt: 0,
+        building_age: 9, zone_risk_flag: 0, landlord_risk_flag: 0, broker_trust_comprehensive: 0.8523,
+        user_checklist_pass_rate: 0.85, risk_score_unified: 0.0826, broker_insurance_flag: 0, broker_risk_flag: 0,
+        jeonse_ratio: 0.0, yearly_cost_per_m2: 13.06, fraud_label: 0
+      }
+    ];
+
+    // 2) Map init (Leaflet)
+    const map = L.map('map', { zoomControl: true, preferCanvas: true }).setView([37.5665, 126.9780], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+
+    // 3) Helpers
+    function riskLevel(score){
+      if(score >= 0.6) return {label:'HIGH', cls:'high', color:'#ef4444'};
+      if(score >= 0.3) return {label:'MID', cls:'mid', color:'#f59e0b'};
+      return {label:'LOW', cls:'low', color:'#16a34a'};
+    }
+    function fmt(n){ return (typeof n === 'number') ? n.toLocaleString('ko-KR') : n; }
+    function randomSeoulCoord(){ const lat = 37.45 + Math.random() * (37.70 - 37.45); const lng = 126.80 + Math.random() * (127.18 - 126.80); return [lat, lng]; }
+
+    // 4) Small demo markers (keep 2 for quick sanity check)
+    const markers = [];
+    function createMarker(lease, coord){
+      const rl = riskLevel(lease.risk_score_unified || 0);
+      const icon = L.divIcon({ className: 'custom-pin', html: `<div class="pin" style="--c:${rl.color}"></div>`, iconSize: [26,26], iconAnchor:[13,13] });
+      const m = L.marker(coord, {icon}).addTo(map);
+      m.lease = lease;
+      m.on('click', () => { showDetails(lease, coord); m.bindPopup(`<div class="pop"><h4>${lease.bldg_name}</h4><small>${lease.signgungu_standard}</small><br/><span class="chip risk ${rl.cls}">Risk ${rl.label} • ${(lease.risk_score_unified*100).toFixed(1)}%</span></div>`).openPopup(); });
+      markers.push(m);
+      return m;
+    }
+    leases.forEach(ls => createMarker(ls, randomSeoulCoord()));
+
+    // 5) Simple Leaflet overlay (500 pts is light)
+    let pointsLayer = L.layerGroup().addTo(map);
+    let bigData = [];
+    let pointMarkers = []; // keep refs for tooltip toggle     // [{position:[lng,lat], row:orig, risk:number}]
+
+    function renderPoints(){
+      pointsLayer.clearLayers();
+      pointMarkers = [];
+      // Compute counts for legend
+      let cLow=0, cMid=0, cHigh=0;
+      bigData.forEach(o=>{
+        const r = o.risk || 0;
+        const color = r>=0.6 ? '#ef4444' : (r>=0.3 ? '#f59e0b' : '#16a34a');
+        if(r>=0.6) cHigh++; else if(r>=0.3) cMid++; else cLow++;
+        const icon = L.divIcon({
+          className:'pin2wrap',
+          html:`<div class="pin2" style="--c:${color}"><span class="dot"></span></div>`,
+          iconSize:[22,22], iconAnchor:[11,11]
+        });
+        const m = L.marker([o.position[1], o.position[0]], {icon}).addTo(pointsLayer);
+        // Tooltip content
+        const name = (o.row && (o.row.bldg_name || o.row.bldg || o.row.name)) || '건물';
+        const riskTxt = r>=0.6 ? 'HIGH' : (r>=0.3 ? 'MID' : 'LOW');
+        m.bindTooltip(`${name} • ${Math.round(r*100)}% (${riskTxt})`, {direction:'top', offset:[0,-14], permanent: map.getZoom()>=14, className:'tt'});
+        m.on('click', ()=>{
+          const row = o.row || {};
+          const lease = {
+            lease_id: row.lease_id || '-',
+            lease_date: row.lease_date || '-',
+            lease_type_encoded: Number(row.lease_type_encoded||0),
+            deposit_amount: Number(row.deposit_amount||0),
+            rent_amount: Number(row.rent_amount||0),
+            signgungu_standard: row.signgungu_standard || '서울시',
+            bldg_name: row.bldg_name || name,
+            area_m2: Number(row.area_m2||0),
+            build_year: Number(row.build_year||0),
+            building_age: Number(row.building_age||0),
+            deposit_per_m2: Number(row.deposit_per_m2||0),
+            region_accident_rate: Number(row.region_accident_rate||0),
+            avg_debt_amt: Number(row.avg_debt_amt||0),
+            jeonse_ratio: Number(row.jeonse_ratio||0),
+            yearly_cost_per_m2: Number(row.yearly_cost_per_m2||0),
+            zone_risk_flag: Number(row.zone_risk_flag||0),
+            landlord_risk_flag: Number(row.landlord_risk_flag||0),
+            broker_trust_comprehensive: Number(row.broker_trust_comprehensive||0),
+            broker_insurance_flag: Number(row.broker_insurance_flag||0),
+            broker_risk_flag: Number(row.broker_risk_flag||0),
+            user_checklist_pass_rate: Number(row.user_checklist_pass_rate||0),
+            risk_score_unified: Number(row.risk_score_unified ?? o.risk ?? 0),
+            fraud_label: Number(row.fraud_label||0)
+          };
+          showDetails(lease, [o.position[1], o.position[0]]);
+        });
+        pointMarkers.push(m);
+      });
+      // update legend counts if available
+      const el = document.getElementById('legend-counts');
+      if(el){ el.innerHTML = `<div><span class="dot low"></span> Low <small class="muted">${cLow.toLocaleString()}</small></div>
+        <div><span class="dot mid"></span> Mid <small class="muted">${cMid.toLocaleString()}</small></div>
+        <div><span class="dot high"></span> High <small class="muted">${cHigh.toLocaleString()}</small></div>`; }
+    }
+
+    function refreshTooltips(){
+      const perm = map.getZoom()>=14;
+      pointMarkers.forEach(m=>{ if(m.getTooltip()){ m.getTooltip().options.permanent = perm; m.openTooltip(); } });
+    }
+
+    map.on('zoomend', refreshTooltips);
+
+    // 6) CSV sampling (cap 500)
+    function startCsvSampling(file, k){
+      const K = Math.min(k || 500, 500);
+      bigData = []; // reset
+      let n = 0;
+      const bbox = {minLat:37.45, maxLat:37.70, minLng:126.80, maxLng:127.18};
+
+      Papa.parse(file, {
+        header: true,
+        dynamicTyping: false,
+        worker: true,
+        step: (results) => {
+          if(!results || !results.data) return;
+          if(n >= K) return; // ignore extra rows beyond cap
+          const row = results.data;
+          const lat = bbox.minLat + Math.random()*(bbox.maxLat-bbox.minLat);
+          const lng = bbox.minLng + Math.random()*(bbox.maxLng-bbox.minLng);
+          const risk = Number(row.risk_score_unified || row.risk || Math.random());
+          bigData.push({ position:[lng,lat], row, risk });
+          n++;
+        },
+        complete: () => {
+          renderPoints();
+          console.log(`CSV loaded (capped @${bigData.length})`);
+        },
+        error: (err) => {
+          console.error('CSV parse error', err);
+          alert('CSV 파싱 중 오류가 발생했습니다. 콘솔을 확인하세요.');
+        }
+      });
+    }
+
+
+    // 7) Detail panel & toolbar
+    const infoBox = document.getElementById('info');
+    const summary = document.getElementById('summary');
+    function showDetails(d, coord){
+      summary.style.display = 'none';
+      infoBox.style.display = 'block';
+      const rl = riskLevel(d.risk_score_unified || 0);
+      infoBox.innerHTML = `
+        <div class="grid2">
+          <div class="card">
+            <div class="chip risk ${rl.cls}">통합 위험도: <b style="margin-left:6px">${((d.risk_score_unified||0)*100).toFixed(1)}%</b></div>
+            <div style="margin-top:8px" class="muted">좌표: ${coord[0].toFixed(4)}, ${coord[1].toFixed(4)}</div>
+          </div>
+          <div class="card">
+            <div class="chip"><i class="fa-solid fa-building"></i><b>${d.bldg_name}</b></div>
+            <div class="muted" style="margin-top:6px">${d.signgungu_standard}</div>
+          </div>
+        </div>
+        <div style="height:10px"></div>
+        <div class="row"><b>계약 ID</b><div>${d.lease_id}</div></div>
+        <div class="row"><b>계약일</b><div>${d.lease_date}</div></div>
+        <div class="row"><b>유형</b><div>${d.lease_type_encoded===0?'전세':'월세'}</div></div>
+        <div class="row"><b>보증금</b><div>${fmt(d.deposit_amount)} 만원</div></div>
+        <div class="row"><b>월세</b><div>${fmt(d.rent_amount)} 만원</div></div>
+        <div class="row"><b>전용면적</b><div>${fmt(d.area_m2)} ㎡</div></div>
+        <div class="row"><b>건축연도</b><div>${d.build_year} (연식 ${fmt(d.building_age)}년)</div></div>
+        <div class="row"><b>면적당 보증금</b><div>${fmt(d.deposit_per_m2)} 만원/㎡</div></div>
+        <div class="row"><b>지역 사고율</b><div>${((d.region_accident_rate||0)*100).toFixed(1)}%</div></div>
+        <div class="row"><b>평균 부채</b><div>${fmt(d.avg_debt_amt)} 원</div></div>
+        <div class="row"><b>전세가율</b><div>${((d.jeonse_ratio||0)*100).toFixed(1)}%</div></div>
+        <div class="row"><b>연간 비용(㎡)</b><div>${fmt(d.yearly_cost_per_m2)} 만원</div></div>
+        <div class="row"><b>지역 위험</b><div><span class="badge ${d.zone_risk_flag? 'no':'ok'}">${d.zone_risk_flag? '위험':'정상'}</span></div></div>
+        <div class="row"><b>집주인 위험</b><div><span class="badge ${d.landlord_risk_flag? 'no':'ok'}">${d.landlord_risk_flag? '위험':'정상'}</span></div></div>
+        <div class="row"><b>중개사 신뢰도</b><div>${(((d.broker_trust_comprehensive)||0)*100).toFixed(1)}%</div></div>
+        <div class="row"><b>중개사 보험</b><div><span class="badge ${d.broker_insurance_flag? 'ok':'no'}">${d.broker_insurance_flag? '가입':'미가입'}</span></div></div>
+        <div class="row"><b>중개사 리스크</b><div><span class="badge ${d.broker_risk_flag? 'no':'ok'}">${d.broker_risk_flag? '있음':'없음'}</span></div></div>
+        <div class="row"><b>체크리스트 통과율</b><div>사용자 ${Math.round(((d.user_checklist_pass_rate)||0)*100)}%</div></div>
+        <div class="row"><b>사기 레이블</b><div><span class="badge ${d.fraud_label? 'no':'ok'}">${d.fraud_label? '의심':'정상'}</span></div></div>
+      `;
+    }
+
+    document.getElementById('btnReset').addEventListener('click',()=>{ map.setView([37.5665, 126.9780], 12); });
+    document.getElementById('btnRandom').addEventListener('click',()=>{ markers.forEach(m=>{ m.setLatLng(randomSeoulCoord()); }); });
+    document.getElementById('btnToggle').addEventListener('click',()=>{ document.getElementById('detail').classList.toggle('hidden'); });
+
+    // CSV upload handlers
+    const csvInput = document.getElementById('csvFile');
+    const sampleInput = document.getElementById('sampleSize');
+    csvInput.addEventListener('change', (e)=>{
+      const file = e.target.files && e.target.files[0];
+      if(!file) return;
+      const k = Math.min(Math.max(parseInt(sampleInput.value||'500',10),1), 500);
+      startCsvSampling(file, k);
+    });
+
+    // 8) Legend
+    const legend = L.control({position:'bottomright'});
+    legend.onAdd = function(){
+      const div = L.DomUtil.create('div','legend');
+      div.innerHTML = `
+        <div style="font-weight:700; color:#c8d7ff; margin-bottom:6px">Risk Legend</div>
+        <div id="legend-counts"></div>
+      `;
+      return div;
+    };
+    legend.addTo(map);
+  </script>
+</body>
+</html>
