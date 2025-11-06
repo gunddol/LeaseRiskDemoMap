@@ -171,7 +171,7 @@
         // Tooltip content
         const name = (o.row && (o.row.bldg_name || o.row.bldg || o.row.name)) || '건물';
         const riskTxt = r>=0.6 ? 'HIGH' : (r>=0.3 ? 'MID' : 'LOW');
-        m.bindTooltip(`${name} • ${Math.round(r*100)}% (${riskTxt})`, {direction:'top', offset:[0,-14], permanent: map.getZoom()>=14, className:'tt'});
+        m.bindTooltip(`${name} • ${Math.round(r*100)}% (${riskTxt})`, {direction:'top', offset:[0,-14], permanent: map.getZoom()>=16, className:'tt'});
         m.on('click', ()=>{
           const row = o.row || {};
           const lease = {
