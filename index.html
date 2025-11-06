@@ -131,29 +131,8 @@
 
   <script>
     // === Inline JS (clean rewrite) + CSV reservoir sampling & deck.gl overlay ===
-    // 1) Sample data
-    const leases = [
-      {
-        lease_id: 'L-0000000', lease_date: '2024-11-30', lease_type_encoded: 0,
-        deposit_amount: 120000, rent_amount: 0, signgungu_standard: '강남구 삼성동', bldg_name: 'THESHARP강남센텀',
-        housing_type_encoded: 0, area_m2: 129.97, build_year: 2021, lease_risk_level: 0,
-        deposit_per_m2: 923.285, region_accident_rate: 0.66, avg_debt_amt: 6670000000,
-        building_age: 3, zone_risk_flag: 0, landlord_risk_flag: 0, broker_trust_comprehensive: 0.8928,
-        user_checklist_pass_rate: 0.65, risk_score_unified: 0.2297, broker_insurance_flag: 1, broker_risk_flag: 0,
-        jeonse_ratio: 0.0, yearly_cost_per_m2: 20.56, fraud_label: 0
-      },
-      {
-        lease_id: 'L-0000008', lease_date: '2024-11-30', lease_type_encoded: 1,
-        deposit_amount: 1000, rent_amount: 90, signgungu_standard: '마포구 합정동', bldg_name: '마포삼성3(연도미상)',
-        housing_type_encoded: 1, area_m2: 84.99, build_year: 2015, lease_risk_level: 0,
-        deposit_per_m2: 11.76, region_accident_rate: 1.2, avg_debt_amt: 0,
-        building_age: 9, zone_risk_flag: 0, landlord_risk_flag: 0, broker_trust_comprehensive: 0.8523,
-        user_checklist_pass_rate: 0.85, risk_score_unified: 0.0826, broker_insurance_flag: 0, broker_risk_flag: 0,
-        jeonse_ratio: 0.0, yearly_cost_per_m2: 13.06, fraud_label: 0
-      }
-    ];
-
-    // 2) Map init (Leaflet)
+    
+    // Map init (Leaflet)
     const map = L.map('map', { zoomControl: true, preferCanvas: true }).setView([37.5665, 126.9780], 12);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
 
@@ -166,20 +145,10 @@
     function fmt(n){ return (typeof n === 'number') ? n.toLocaleString('ko-KR') : n; }
     function randomSeoulCoord(){ const lat = 37.45 + Math.random() * (37.70 - 37.45); const lng = 126.80 + Math.random() * (127.18 - 126.80); return [lat, lng]; }
 
-    // 4) Small demo markers (keep 2 for quick sanity check)
+    // Data layer
     const markers = [];
-    function createMarker(lease, coord){
-      const rl = riskLevel(lease.risk_score_unified || 0);
-      const icon = L.divIcon({ className: 'custom-pin', html: `<div class="pin" style="--c:${rl.color}"></div>`, iconSize: [26,26], iconAnchor:[13,13] });
-      const m = L.marker(coord, {icon}).addTo(map);
-      m.lease = lease;
-      m.on('click', () => { showDetails(lease, coord); m.bindPopup(`<div class="pop"><h4>${lease.bldg_name}</h4><small>${lease.signgungu_standard}</small><br/><span class="chip risk ${rl.cls}">Risk ${rl.label} • ${(lease.risk_score_unified*100).toFixed(1)}%</span></div>`).openPopup(); });
-      markers.push(m);
-      return m;
-    }
-    leases.forEach(ls => createMarker(ls, randomSeoulCoord()));
 
-    // 5) Simple Leaflet overlay (500 pts is light)
+    // Simple Leaflet overlay (500 pts is light)
     let pointsLayer = L.layerGroup().addTo(map);
     let bigData = [];
     let pointMarkers = []; // keep refs for tooltip toggle     // [{position:[lng,lat], row:orig, risk:number}]
@@ -301,8 +270,8 @@
         </div>
         <div style="height:10px"></div>
         <div class="row"><b>계약 ID</b><div>${d.lease_id}</div></div>
-        <div class="row"><b>계약일</b><div>${d.lease_date}</div></div>
-        <div class="row"><b>유형</b><div>${d.lease_type_encoded===0?'전세':'월세'}</div></div>
+        <div class="row"><b>계약체결일</b><div>${d.lease_date}</div></div>
+        <div class="row"><b>전월세구분</b><div>${d.lease_type_encoded===0?'전세':'월세'}</div></div>
         <div class="row"><b>보증금</b><div>${fmt(d.deposit_amount)} 만원</div></div>
         <div class="row"><b>월세</b><div>${fmt(d.rent_amount)} 만원</div></div>
         <div class="row"><b>전용면적</b><div>${fmt(d.area_m2)} ㎡</div></div>
@@ -315,10 +284,10 @@
         <div class="row"><b>지역 위험</b><div><span class="badge ${d.zone_risk_flag? 'no':'ok'}">${d.zone_risk_flag? '위험':'정상'}</span></div></div>
         <div class="row"><b>집주인 위험</b><div><span class="badge ${d.landlord_risk_flag? 'no':'ok'}">${d.landlord_risk_flag? '위험':'정상'}</span></div></div>
         <div class="row"><b>중개사 신뢰도</b><div>${(((d.broker_trust_comprehensive)||0)*100).toFixed(1)}%</div></div>
-        <div class="row"><b>중개사 보험</b><div><span class="badge ${d.broker_insurance_flag? 'ok':'no'}">${d.broker_insurance_flag? '가입':'미가입'}</span></div></div>
-        <div class="row"><b>중개사 리스크</b><div><span class="badge ${d.broker_risk_flag? 'no':'ok'}">${d.broker_risk_flag? '있음':'없음'}</span></div></div>
-        <div class="row"><b>체크리스트 통과율</b><div>사용자 ${Math.round(((d.user_checklist_pass_rate)||0)*100)}%</div></div>
-        <div class="row"><b>사기 레이블</b><div><span class="badge ${d.fraud_label? 'no':'ok'}">${d.fraud_label? '의심':'정상'}</span></div></div>
+        <div class="row"><b>중개사공제가입</b><div><span class="badge ${d.broker_insurance_flag? 'ok':'no'}">${d.broker_insurance_flag? '가입':'미가입'}</span></div></div>
+        <div class="row"><b>중개사위험신호</b><div><span class="badge ${d.broker_risk_flag? 'no':'ok'}">${d.broker_risk_flag? '있음':'없음'}</span></div></div>
+        <div class="row"><b>사용자점검완료율</b><div>사용자 ${Math.round(((d.user_checklist_pass_rate)||0)*100)}%</div></div>
+        <div class="row"><b>피해위험라벨</b><div><span class="badge ${d.fraud_label? 'no':'ok'}">${d.fraud_label? '의심':'정상'}</span></div></div>
       `;
     }
 
